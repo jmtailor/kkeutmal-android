@@ -1,0 +1,21 @@
+{
+  "name": "kkeutmal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "끝말잇기 (개인용 안드로이드 앱)",
+  "scripts": {
+    "bundle": "esbuild src/native.js --bundle --minify --format=iife --outfile=www/native.js",
+    "sync": "npm run bundle && npx cap sync android",
+    "apk": "npm run sync && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
+    "@capacitor-community/text-to-speech": "^8.0.2",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "esbuild": "^0.28.2"
+  }
+}
