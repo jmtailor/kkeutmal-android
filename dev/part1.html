@@ -136,4 +136,14 @@ svg { display: block; }
 @media (max-height: 500px) {
   .score, .eyebrow, .stage-sub, .who { display: none; }
 }
+
+/* FIX-01: time limit row (switch + shrinking bar) */
+.timer-row { display: flex; align-items: center; gap: 12px; flex: none; min-height: 26px; }
+.timebar { flex: 1; min-width: 0; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.timebar[hidden] { display: none; }
+.timebar .fill { height: 100%; width: 100%; background: var(--me); border-radius: 4px; }
+.timebar.low .fill { background: var(--danger); }
+.stage-title { word-break: keep-all; }
+.timer-hint { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-2); }
+@media (max-height: 500px) { .timer-row { min-height: 22px; } }
 </style>

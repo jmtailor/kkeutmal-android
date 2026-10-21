@@ -23,6 +23,19 @@ eq(check('a','사과',used).reason,'hangul','한글아님');
 eq(check('과','사과',used).reason,'short','1글자');
 eq(check('이슬','바다 ' .trim()+'리'.repeat(0)||'기리',used).ok,false,'(기리 뒤 이슬은 불가: 리→이 가능 아님? 확인)');
 eq(check('이슬','기리',used).ok,true,'기리→이슬 두음');
+// FIX-02: 내장 목록 밖 단어의 형태 검사
+const R = (raw)=>{const r=check(raw,null,new Set());return r.ok?'ok':r.reason;};
+eq(R('나는 밥을 먹었다'),'space','FIX-02 공백 문장');
+eq(R('아이스 크림'),'space','FIX-02 공백 두 단어');
+eq(R('나는밥을먹었다'),'long','FIX-02 긴 입력(공백 없음)');
+eq(R('가나다라마바사'),'long','FIX-02 7글자 목록 밖');
+eq(R('아아아'),'repeat','FIX-02 3회 반복');
+eq(R('밥먹어요'),'sentence','FIX-02 어미 ~어요');
+eq(R('공부합니다'),'sentence','FIX-02 어미 ~니다');
+eq(R('스마트폰'),'ok','FIX-02 목록 단어는 통과');
+eq(R('사이다'),'ok','FIX-02 정상 단어(목록 밖) 통과');
+eq(R('가나다라'),'ok','FIX-02 한계: 형태가 단어 같으면 통과(사전 단계 C에서 해결)');
+eq(R('ㅋㅋㅋ'),'hangul','한글 자모는 한글 단어 아님');
 // dead ends and playability
 let dead=[]; for (const w of WORDS){ if(continuations(w,new Set())===0) dead.push(w);} console.log('dead-end words', dead.length, dead.join(' '));
 // simulate random games app vs app, check no crash and chain validity
