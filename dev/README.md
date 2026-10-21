@@ -25,3 +25,4 @@
 - 이 폴더의 파일은 백업 V1 `src_dev/`와 SHA-256이 동일합니다.
 - 사전을 내장하므로 `index.html`이 약 2.2MB 커집니다. 사전 데이터는 CC BY-SA 2.0 KR 동일조건 적용 대상이며, 저장소가 공개이므로 `dict/NOTICE.md`를 유지해야 합니다.
 - 이 폴더의 `build.js`·`part*.html`은 V1 `src_dev/`와 더 이상 동일하지 않습니다(FIX-01/02, 사전 반영).
+- FIX-06(다른 앱 소리 멈추기)은 네이티브 코드가 필요합니다: `src/native.js`(AudioFocus 등록), `android/app/src/main/java/com/kkeutmal/app/AudioFocusPlugin.java`, `MainActivity.java`. 웹 미리보기에서는 비활성입니다.

@@ -155,4 +155,17 @@ svg { display: block; }
 .info h2 { font-family: var(--font-display); font-weight: 400; font-size: 20px; margin: 0 0 8px; }
 .info p { margin: 0 0 10px; line-height: 1.5; font-size: 14px; }
 .info .info-meta { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+.ver { font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: 0; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; vertical-align: middle; margin-left: 4px; }
+.dict-row { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: none; width: 100%; text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; cursor: pointer; }
+.dict-main { font-size: 13px; min-width: 0; } .dict-main b { margin-right: 4px; }
+.dict-sub { font-size: 11.5px; color: var(--ink-2); }
+.fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 50; }
+.fx i { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; animation: fxfall 2s ease-in forwards; }
+.fx.lose i { width: 6px; height: 6px; border-radius: 50%; background: #7b8a93; opacity: .7; animation-name: fxrain; }
+@keyframes fxfall { to { transform: translate(var(--dx, 0), 105vh) rotate(var(--rot, 360deg)); opacity: .9; } }
+@keyframes fxrain { to { transform: translateY(105vh); opacity: 0; } }
+.stage.pop { animation: fxpop .7s ease-out; }
+.stage.shake { animation: fxshake .6s ease-in-out; }
+@keyframes fxpop { 0% { transform: scale(.9); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes fxshake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(5px); } }
 </style>
