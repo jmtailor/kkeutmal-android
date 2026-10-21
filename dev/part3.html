@@ -2,23 +2,18 @@
 <div class="shell">
   <header class="top">
     <div>
-      <h1>끝말잇기</h1>
+      <h1>끝말잇기 <span class="ver" id="ver">FIX-08</span></h1>
       <p class="score" id="score">이어간 단어 0 · 내 단어 0</p>
     </div>
     <div class="top-actions">
-      <button type="button" class="btn btn-icon" id="infoBtn" aria-label="사전 출처 보기" title="사전 출처">출처</button>
       <button type="button" class="btn" id="newGame">새 게임</button>
     </div>
   </header>
 
-  <div class="claude-row" id="claudeRow">
-    <label class="sw">
-      <input type="checkbox" role="switch" id="claudeSw" disabled>
-      <span class="track" aria-hidden="true"><span class="knob"></span></span>
-      <span class="sw-text">Claude 사전 확인</span>
-    </label>
-    <span class="sw-state" id="swState" aria-live="polite"></span>
-  </div>
+  <button type="button" class="dict-row" id="infoBtn" aria-label="단어 사전 출처 자세히 보기">
+    <span class="dict-main"><b>단어 사전</b>국립국어원 표준국어대사전</span>
+    <span class="dict-sub">CC BY-SA 2.0 KR · 눌러서 출처 보기</span>
+  </button>
 
   <div class="settings">
     <div class="seg" role="radiogroup" aria-label="앱 출력 방식">
@@ -41,6 +36,15 @@
     </label>
     <div class="timebar" id="timebar" role="progressbar" aria-label="남은 시간" aria-valuemin="0" aria-valuemax="20" aria-valuenow="20" hidden><div class="fill" id="timefill"></div></div>
     <span class="timer-hint" id="timerHint">내 차례에만 적용돼요</span>
+  </div>
+
+  <div class="timer-row" id="mediaRow">
+    <label class="sw">
+      <input type="checkbox" role="switch" id="mediaSw">
+      <span class="track" aria-hidden="true"><span class="knob"></span></span>
+      <span class="sw-text">다른 앱 소리 멈추기</span>
+    </label>
+    <span class="timer-hint" id="mediaHint">음악·영상을 멈춰요</span>
   </div>
 
   <main class="play">
@@ -70,7 +74,7 @@
 <script id="ui">
 (function () {
   const $ = id => document.getElementById(id);
-  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), sw: $('claudeSw'), swState: $('swState'), claudeRow: $('claudeRow'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
+  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), infoBtn: $('infoBtn'), mediaSw: $('mediaSw'), mediaHint: $('mediaHint'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
   const SHOW = 4; // words kept on screen
   const TIME_LIMIT_MS = 20000; // FIX-01: 시간제한 20초 (사용자 결정)
 
@@ -102,97 +106,38 @@
     } catch (e) {}
   }
   function speak(text) {
-    if (!hasTTS) return;
+    if (!hasTTS) return Promise.resolve();
+    focusOn();
     if (NATIVE) {
-      NATIVE.TextToSpeech.speak({ text, lang: 'ko-KR', rate: 0.95, pitch: 1.0, volume: 1.0 }).catch(() => {
+      return NATIVE.TextToSpeech.speak({ text, lang: 'ko-KR', rate: 0.95, pitch: 1.0, volume: 1.0 }).catch(() => {
         setStatus('음성 출력에 실패했어요. 휴대폰 설정에서 텍스트 음성 변환(TTS) 엔진을 확인해 주세요.', true);
       });
-      return;
     }
-    try {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ko-KR';
-      u.rate = 0.95;
-      const v = koVoice(); if (v) u.voice = v;
-      speechSynthesis.speak(u);
-    } catch (e) { /* speech output is optional */ }
+    return new Promise(res => {
+      try {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        u.rate = 0.95;
+        const v = koVoice(); if (v) u.voice = v;
+        u.onend = u.onerror = () => res();
+        speechSynthesis.speak(u);
+        setTimeout(res, 6000);
+      } catch (e) { res(); }
+    });
   }
+  // FIX-06: 다른 앱의 미디어 재생 멈추기 (Android 오디오 포커스)
+  const FOCUS = NATIVE && NATIVE.AudioFocus ? NATIVE.AudioFocus : null;
+  let focusPref = false;
+  function loadFocusPref() { try { return localStorage.getItem('kk-media') === '1'; } catch (e) { return false; } }
+  function focusOn() { if (focusPref && FOCUS) { try { FOCUS.request().catch(() => {}); } catch (e) {} } }
+  function focusOff() { if (FOCUS) { try { FOCUS.abandon().catch(() => {}); } catch (e) {} } }
   if (hasTTS && !NATIVE) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {} }
 
-  /* ---------- Claude dictionary switch ---------- */
-  // states: unavail (not opened inside Claude), checking, off, busy (asking permission), on, denied
+  /* ---------- dictionary check ---------- */
   const WORD_SET = new Set(WORDS);
-  const verdicts = new Map();
-  let claudeState = 'unavail';
-  let sampleFn = null;
-  function saved() { try { return localStorage.getItem('kk-claude') === '1'; } catch (e) { return false; } }
-  function save(v) { try { localStorage.setItem('kk-claude', v ? '1' : '0'); } catch (e) {} }
-  const SW_TEXT = {
-    unavail: NATIVE ? '사용 불가 · 앱 버전은 Claude 연결이 없어요' : '사용 불가 · Claude 앱 밖에서 실행 중',
-    checking: '연결 확인 중…',
-    off: '꺼짐 · 한글 두 글자 이상이면 인정',
-    busy: '허용 요청 중…',
-    on: '켜짐 · 목록에 없는 단어를 Claude가 확인',
-    denied: '허용되지 않아 꺼졌어요'
-  };
-  function paintClaude() {
-    els.sw.checked = claudeState === 'on' || claudeState === 'busy';
-    els.sw.disabled = claudeState === 'unavail' || claudeState === 'checking' || claudeState === 'busy';
-    els.swState.textContent = SW_TEXT[claudeState];
-  }
-  if (window.claude && window.claude.use) {
-    claudeState = 'checking';
-    window.claude.use('sample').then(f => {
-      sampleFn = f || null;
-      claudeState = f ? (saved() ? 'on' : 'off') : 'unavail';
-      paintClaude();
-    }).catch(() => { claudeState = 'unavail'; paintClaude(); });
-  }
-  paintClaude();
-
-  els.sw.addEventListener('change', async () => {
-    if (!sampleFn) { paintClaude(); return; }
-    if (!els.sw.checked) { claudeState = 'off'; save(false); paintClaude(); return; }
-    claudeState = 'busy'; paintClaude();
-    try {
-      await sampleFn.json('JSON만 답하세요: {"ok": true}', { modelTier: 'quick' });
-      claudeState = 'on'; save(true); setStatus('');
-    } catch (e) {
-      if (e && e.code === 'not_granted') { claudeState = 'denied'; save(false); }
-      else { claudeState = 'off'; setStatus('Claude 연결에 실패했어요. 잠시 뒤 다시 켜 주세요.', true); }
-    }
-    paintClaude();
-  });
-  els.claudeRow.addEventListener('click', () => {
-    if (claudeState === 'unavail') setStatus((NATIVE ? '설치한 앱에는 Claude 연결이 없어서 ' : 'Claude 사전 확인은 Claude 앱 안에서 열었을 때만 쓸 수 있어요. ') + '지금은 한글 두 글자 이상이면 단어로 인정해요.');
-  });
-
-  async function isWord(w) {
-    if (WORD_SET.has(w)) return { ok: true };
-    if (verdicts.has(w)) return verdicts.get(w);
-    if (claudeState !== 'on' || !sampleFn) return { ok: true, skipped: true };
-    const prompt = '한국어 끝말잇기 심판입니다. 아래 단어가 국어사전(표준국어대사전)에 올라 있는 실제 단어인지 판정하세요.\n' +
-      '인정: 일반 명사, 널리 쓰는 외래어 표기, 널리 쓰는 복합어.\n' +
-      '불인정: 철자가 틀린 글자, 존재하지 않는 조합, 뜻 없는 글자 나열, 욕설, 비표준 준말, 문장이나 구.\n' +
-      '단어: ' + w + '\n' +
-      '다음 JSON만 답하세요. 예: {"valid": true, "reason": "사전에 있는 명사예요."}';
-    try {
-      const r = await sampleFn.json(prompt, { modelTier: 'quick' });
-      if (r && typeof r.valid === 'boolean') {
-        const v = { ok: r.valid, reason: String(r.reason || '').slice(0, 60) };
-        verdicts.set(w, v);
-        return v;
-      }
-      return { ok: true, failed: true };
-    } catch (e) {
-      const code = e && e.code;
-      if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(code)) {
-        claudeState = code === 'not_granted' ? 'denied' : 'off'; save(false); paintClaude();
-      }
-      return { ok: true, failed: true };
-    }
-  }
+  // FIX-04: 사전은 앱에 내장되어 있어 check()가 모두 처리한다(Claude 연결 제거).
+  async function isWord(w) { return { ok: true }; }
 
   /* ---------- time limit (FIX-01) ---------- */
   let timeOn = false, tId = null, deadline = 0, remain = TIME_LIMIT_MS;
@@ -246,7 +191,7 @@
     els.word.value = '';
     render();
     startTimer();
-    if (speakFirst && mode() !== 'text') speak(first);
+    if (speakFirst && mode() !== 'text') speak(first).then(() => autoMic(state.gen));
   }
   function lastWord() { return state.history[state.history.length - 1].word; }
 
@@ -257,8 +202,7 @@
     busy = true;
     const wasRunning = pauseTimer();
     const gen = state.gen;
-    setStatus(WORD_SET.has(res.word) || claudeState !== 'on' ? '' : '국어사전에서 확인하는 중…');
-    const v = await isWord(res.word);
+        const v = await isWord(res.word);
     if (state.gen !== gen) return; // a new game started meanwhile
     if (!v.ok) {
       busy = false;
@@ -266,7 +210,7 @@
       setStatus('‘' + res.word + '’은(는) 사전에 없는 단어 같아요. ' + (v.reason || '다른 단어를 말해 주세요.'), true);
       return;
     }
-    setStatus(v.failed ? '사전 확인에 실패해 이 단어를 그대로 인정했어요.' : '');
+    setStatus('');
     stopTimer();
     state.used.add(res.word);
     const prev = lastWord();
@@ -288,8 +232,29 @@
     state.reveal = false;
     render();
     startTimer();
-    if (mode() !== 'text') speak(w);
+    if (mode() !== 'text') speak(w).then(() => autoMic(state.gen));
     if (!matchMedia('(pointer: coarse)').matches) els.word.focus();
+  }
+
+  /* ---------- end-of-game animation (FIX-08) ---------- */
+  function endFx(kind) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const box = document.createElement('div');
+    box.className = 'fx ' + kind; box.setAttribute('aria-hidden', 'true');
+    const n = kind === 'win' ? 36 : 14;
+    const cols = ['#f4b942', '#1f7a6a', '#e5604d', '#6fb7e9', '#9b6bd1'];
+    for (let i = 0; i < n; i++) {
+      const e = document.createElement('i');
+      e.style.left = (kind === 'win' ? Math.random() * 100 : 10 + Math.random() * 80) + '%';
+      e.style.animationDelay = (Math.random() * 0.6) + 's';
+      e.style.animationDuration = (1.6 + Math.random() * 1.4) + 's';
+      if (kind === 'win') { e.style.background = cols[i % cols.length]; e.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px'); e.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg'); }
+      box.appendChild(e);
+    }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 3600);
+    els.stage.classList.remove('shake', 'pop'); void els.stage.offsetWidth;
+    els.stage.classList.add(kind === 'win' ? 'pop' : 'shake');
   }
 
   /* ---------- render ---------- */
@@ -339,11 +304,18 @@
       if (mode() !== 'text') speak(h.word);
       if (mode() === 'voice') { h.shown = true; if (+b.dataset.i === state.history.length - 1) state.reveal = true; render(); }
     }));
+    if (state.over && !state.fx) { state.fx = true; endFx(state.lose === 'time' ? 'lose' : 'win'); }
     els.word.disabled = state.over;
     els.word.placeholder = state.over ? '새 게임을 시작해 주세요' : (st[1] ? "‘" + st[0] + "’ 또는 ‘" + st[1] + "’(으)로 시작" : "‘" + st[0] + "’(으)로 시작");
   }
 
   /* ---------- speech in ---------- */
+  // FIX-07: '음성'만 선택했을 때, 앱이 말을 마치면 마이크를 자동으로 켠다. '둘 다'는 기존처럼 버튼을 눌러야 한다.
+  function autoMic(gen) {
+    if (mode() !== 'voice' || !state || state.gen !== gen || state.over || busy || listening) return;
+    startMic();
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   function micMsg(code) {
     if (code === 'not-allowed' || code === 'service-not-allowed') return '이 화면에서는 마이크가 막혀 있어요. 폰 키보드의 마이크 버튼을 쓰거나, APK 앱으로 만들어 쓰면 해결돼요.';
     if (code === 'no-speech') return '말소리가 들리지 않았어요. 마이크 버튼을 다시 눌러 말해 주세요.';
@@ -362,23 +334,46 @@
     if (/not available|unavailable/i.test(m)) return '이 기기에는 음성 인식 서비스가 없어요. Google 앱을 설치하거나 업데이트해 주세요.';
     return '음성 인식에 문제가 생겼어요. 키보드로 입력해 주세요.';
   }
+  async function micReady(RN) {
+    let perm = await RN.checkPermissions();
+    if (perm.speechRecognition !== 'granted') perm = await RN.requestPermissions();
+    if (perm.speechRecognition !== 'granted') return 'permission';
+    // 권한 창 직후 또는 첫 호출에서는 인식기가 아직 준비되지 않을 수 있어 몇 번 더 확인한다.
+    for (let i = 0; i < 4; i++) {
+      const av = await RN.available();
+      if (av && av.available) return 'ok';
+      await sleep(400);
+    }
+    return 'not available';
+  }
   async function startMicNative() {
     const RN = NATIVE.SpeechRecognition;
     if (listening) { try { RN.stop(); } catch (e) {} return; } // stop() answers via the pending start()
     if (state.over || busy) return;
     stopSpeech();
-    try {
-      const av = await RN.available();
-      if (!av.available) { setStatus(nativeMicMsg('not available'), true); return; }
-      let perm = await RN.checkPermissions();
-      if (perm.speechRecognition !== 'granted') perm = await RN.requestPermissions();
-      if (perm.speechRecognition !== 'granted') { setStatus(nativeMicMsg('permission'), true); return; }
-    } catch (e) { setStatus(nativeMicMsg(e), true); return; }
-    listening = true;
+    focusOn();
+    listening = true; // 준비 중에 중복 눌림 방지
     els.mic.classList.add('on'); els.mic.setAttribute('aria-label', '음성 입력 멈추기');
-    setStatus('듣고 있어요. 단어를 말해 주세요.');
+    setStatus('마이크 준비 중…');
+    const micOff = () => { listening = false; els.mic.classList.remove('on'); els.mic.setAttribute('aria-label', '음성으로 입력'); };
     try {
-      const r = await RN.start({ language: 'ko-KR', maxResults: 3, partialResults: false, popup: false });
+      const rd = await micReady(RN);
+      if (rd !== 'ok') { micOff(); setStatus(nativeMicMsg(rd), true); return; }
+    } catch (e) { micOff(); setStatus(nativeMicMsg(e), true); return; }
+    try {
+      let r = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          setStatus('듣고 있어요. 단어를 말해 주세요.');
+          r = await RN.start({ language: 'ko-KR', maxResults: 3, partialResults: false, popup: false });
+          break;
+        } catch (e) {
+          const m = String((e && (e.message || e)) || '');
+          // 첫 시도에서만 나는 일시적 오류는 한 번 더 시도한다.
+          if (attempt === 0 && /Audio|busy|not available|unavailable|error/i.test(m) && !/No speech|No match/i.test(m)) { await sleep(500); continue; }
+          throw e;
+        }
+      }
       const list = ((r && r.matches) || []).map(m => String(m).replace(/\s+/g, ''));
       if (!list.length) { setStatus(nativeMicMsg('No speech'), true); }
       else {
@@ -437,8 +432,16 @@
   }));
   if (!hasTTS) { $('out-voice').disabled = true; $('out-both').disabled = true; $('out-text').checked = true; }
 
-  els.infoBtn = $('infoBtn');
   els.infoBtn.addEventListener('click', () => { const d = $('infoDlg'); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); });
+  focusPref = loadFocusPref();
+  els.mediaSw.checked = focusPref;
+  if (!FOCUS) { els.mediaSw.disabled = true; els.mediaHint.textContent = '설치한 앱에서만 쓸 수 있어요'; }
+  els.mediaSw.addEventListener('change', () => {
+    focusPref = els.mediaSw.checked;
+    try { localStorage.setItem('kk-media', focusPref ? '1' : '0'); } catch (e) {}
+    if (focusPref) focusOn(); else focusOff();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) focusOff(); else focusOn(); });
   timeOn = loadTimePref();
   els.timeSw.checked = timeOn;
   els.timeSw.addEventListener('change', () => {
