@@ -3,7 +3,8 @@ const html = fs.readFileSync(process.argv[2], 'utf8');
 const m = html.match(/<script id="logic">([\s\S]*?)<\/script>/);
 const ui = html.match(/<script id="ui">([\s\S]*?)<\/script>/);
 new Function(ui[1]); // syntax check of UI script
-const api = new Function(m[1] + '; return {WORDS, BY_START, starters, dueum, check, pick, candidates, continuations};')();
+const dm = html.match(/<script id="dict">([\s\S]*?)<\/script>/);
+const api = new Function((dm ? dm[1] : '') + ';' + m[1] + '; return {WORDS, BY_START, starters, dueum, check, pick, candidates, continuations};')();
 const {WORDS, BY_START, starters, check, pick, candidates, continuations} = api;
 console.log('words', WORDS.length, 'start syllables', BY_START.size);
 const eq = (a,b,l)=>{const ok=JSON.stringify(a)===JSON.stringify(b);console.log(ok?'ok  ':'FAIL',l,JSON.stringify(a));};
@@ -23,6 +24,25 @@ eq(check('a','사과',used).reason,'hangul','한글아님');
 eq(check('과','사과',used).reason,'short','1글자');
 eq(check('이슬','바다 ' .trim()+'리'.repeat(0)||'기리',used).ok,false,'(기리 뒤 이슬은 불가: 리→이 가능 아님? 확인)');
 eq(check('이슬','기리',used).ok,true,'기리→이슬 두음');
+// FIX-02: 내장 목록 밖 단어의 형태 검사
+const R = (raw)=>{const r=check(raw,null,new Set());return r.ok?'ok':r.reason;};
+eq(R('나는 밥을 먹었다'),'space','FIX-02 공백 문장');
+eq(R('아이스 크림'),'space','FIX-02 공백 두 단어');
+eq(R('나는밥을먹었다'),'long','FIX-02 긴 입력(공백 없음)');
+eq(R('가나다라마바사'),'long','FIX-02 7글자 목록 밖');
+eq(R('아아아'),'repeat','FIX-02 3회 반복');
+eq(R('밥먹어요'),'sentence','FIX-02 어미 ~어요');
+eq(R('공부합니다'),'sentence','FIX-02 어미 ~니다');
+eq(R('스마트폰'),'ok','FIX-02 목록 단어는 통과');
+eq(R('사이다'),'ok','FIX-02 정상 단어(목록 밖) 통과');
+eq(R('가나다라'),'nodict','C단계: 형태가 단어 같아도 사전에 없으면 거절');
+eq(R('고양이'),'ok','C단계: 사전 단어 통과');
+eq(R('아이스크림'),'ok','C단계: 합성어 통과');
+eq(R('서울'),'ok','C단계: 사전에 있는 명사 통과(고유명사 구분 없음)');
+eq(R('먹었어요'),'sentence','C단계: 어미 메시지 우선');
+const dEnd = '가슴'; const pk = pick(dEnd, new Set([dEnd]), 'normal');
+eq(!!pk && pk[0]==='슴', true, 'C단계: 내장 목록으로 못 잇는 단어는 사전 단어로 이어감 ('+pk+')');
+eq(R('ㅋㅋㅋ'),'hangul','한글 자모는 한글 단어 아님');
 // dead ends and playability
 let dead=[]; for (const w of WORDS){ if(continuations(w,new Set())===0) dead.push(w);} console.log('dead-end words', dead.length, dead.join(' '));
 // simulate random games app vs app, check no crash and chain validity

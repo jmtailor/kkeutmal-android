@@ -50,6 +50,11 @@ function starters(ch) { const d = dueum(ch); return d === ch ? [ch] : [ch, d]; }
 function lastChar(w) { return w[w.length - 1]; }
 
 const WORDS = Array.from(new Set(WORDS_RAW.split(/\s+/).filter(w => w.length >= 2 && HANGUL.test(w))));
+const WORD_LIST = new Set(WORDS);
+/* C단계: 표준국어대사전 일반어 명사(2~8글자). 없으면(테스트 등) 사전 검사를 건너뛴다. */
+const DICT = new Set(typeof DICT_TEXT === 'string' ? DICT_TEXT.split('\n').filter(Boolean) : []);
+const DICT_BY_START = new Map();
+for (const w of DICT) { if (w.length > 3) continue; const k = w[0]; if (!DICT_BY_START.has(k)) DICT_BY_START.set(k, []); DICT_BY_START.get(k).push(w); }
 const BY_START = new Map();
 for (const w of WORDS) { const k = w[0]; if (!BY_START.has(k)) BY_START.set(k, []); BY_START.get(k).push(w); }
 
@@ -64,11 +69,25 @@ function continuations(word, used) {
 }
 function normalize(raw) { return String(raw || '').replace(/[\s.,!?'"“”‘’~·…]/g, ''); }
 /* returns {ok, word} or {ok:false, reason, msg} */
+/* FIX-02: 내장 목록에 없는 단어에만 적용하는 형태 검사. 목록에 있는 단어는 그대로 통과한다. */
+const MAX_FREE_LEN = 6;
+const SENTENCE_ENDINGS = ['니다', '어요', '아요', '해요', '세요', '에요', '예요', '까요', '네요', '군요', '지요', '했다', '한다', '된다', '었다', '았다', '겠다', '는다'];
+function formCheck(w) {
+  if (w.length > MAX_FREE_LEN) return { ok: false, reason: 'long', msg: `너무 길어요. ${MAX_FREE_LEN}글자 이하의 단어를 말해 주세요.` };
+  if (/(.)\1\1/.test(w)) return { ok: false, reason: 'repeat', msg: '같은 글자를 반복한 건 단어가 아닌 것 같아요.' };
+  if (SENTENCE_ENDINGS.some(e => w.endsWith(e))) return { ok: false, reason: 'sentence', msg: '문장처럼 보여요. 명사 단어를 말해 주세요.' };
+  return { ok: true };
+}
 function check(raw, prevWord, used) {
+  if (/\S\s+\S/.test(String(raw || '').trim())) return { ok: false, reason: 'space', msg: '한 단어만 입력해 주세요. 문장은 안 돼요.' };
   const w = normalize(raw);
   if (!w) return { ok: false, reason: 'empty', msg: '단어를 입력해 주세요.' };
   if (!HANGUL.test(w)) return { ok: false, reason: 'hangul', msg: '한글 단어만 입력할 수 있어요.' };
   if (w.length < 2) return { ok: false, reason: 'short', msg: '두 글자 이상의 단어를 말해 주세요.' };
+  if (!WORD_LIST.has(w)) {
+    const f = formCheck(w); if (!f.ok) return f;
+    if (DICT.size && !DICT.has(w)) return { ok: false, reason: 'nodict', msg: '표준국어대사전에 없는 단어 같아요. 다른 단어를 말해 주세요.' };
+  }
   if (prevWord) {
     const st = starters(lastChar(prevWord));
     if (!st.includes(w[0])) return { ok: false, reason: 'chain', msg: `'${st.join("' 또는 '")}'(으)로 시작하는 단어여야 해요.` };
@@ -78,7 +97,11 @@ function check(raw, prevWord, used) {
 }
 /* level: easy | normal | hard */
 function pick(prevWord, used, level) {
-  const pool = prevWord ? candidates(prevWord, used) : WORDS.filter(w => !used.has(w));
+  let pool = prevWord ? candidates(prevWord, used) : WORDS.filter(w => !used.has(w));
+  /* 앱이 아는 단어(WORDS)로 이을 수 없으면 사전 단어(2~3글자)로 잇는다. */
+  if (!pool.length && prevWord && DICT.size) {
+    for (const s of starters(lastChar(prevWord))) for (const w of (DICT_BY_START.get(s) || [])) if (!used.has(w) && formCheck(w).ok) pool.push(w);
+  }
   if (!pool.length) return null;
   const scored = pool.map(w => ({ w, n: continuations(w, used) }));
   let sel = scored;
