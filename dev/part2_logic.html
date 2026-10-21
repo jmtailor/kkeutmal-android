@@ -1,0 +1,90 @@
+<script id="logic">
+/* Pure game logic: no DOM. */
+const WORDS_RAW = `
+가방 가수 가위 가을 가족 가지 가게 가구 가슴 가로등 가시 가면 가운데 가마솥 가뭄 가습기
+나무 나비 나이 나침반 나팔 나그네 나물 나사 낙엽 낙타 난로 날개 남자 낚시 내일 냄비 냉장고 너구리 노래 노을 노트 농구 눈사람 눈썹 늑대 능력 노루 놀이터
+다리 다람쥐 다이어리 단추 달걀 달력 달팽이 담요 대나무 대문 대학교 도끼 도서관 도시 도토리 독수리 돌고래 동물 동굴 두부 둥지 딸기 딸꾹질 땅콩 떡볶이 뚜껑 도마뱀 도깨비 동전
+라디오 라면 라일락 래프팅 레몬 로봇 리본 리모컨 리코더 라벤더 리듬 로켓
+마을 마당 마늘 마차 마술 막대기 만두 만화 말미잘 망치 맥주 머리 먹구름 멜론 모자 모기 모래 목걸이 무지개 무릎 문어 미역 미로 민들레 모닥불 모과 모험 무당벌레 무궁화 미끄럼틀 미소 만년필 망원경
+바다 바나나 바위 바람 바지 박쥐 반지 발자국 밤하늘 밥솥 방울 배추 백조 버섯 버스 번개 별똥별 병아리 보리 보석 복숭아 볼펜 봉투 부엉이 부채 분수 불꽃 비누 비행기 빗자루 빵집 뿌리 보름달 보자기 부엌 부메랑 비둘기 비밀 비타민
+사과 사자 사탕 사슴 산책 상자 새우 샌드위치 생선 서점 선물 선풍기 세탁기 소나기 소금 소방차 손수건 수박 수건 수영장 숟가락 스케이트 시계 시장 식탁 신발 실로폰 쓰레기 소나무 소파 소풍 소포 수첩 수도꼭지 시소 시냇물
+아기 아침 아이스크림 악어 안경 앵무새 양파 어깨 어항 언덕 얼음 엘리베이터 여우 연필 연못 열쇠 영화 오리 오이 오징어 옥수수 우산 우유 우체통 운동장 원숭이 유리 은행 의자 이불 인형 일기 잉어 우주 오렌지 오토바이 이슬 이마 이빨 이야기 인삼 입술 아궁이
+자전거 자동차 잠자리 장갑 장미 전화 전구 접시 정원 젓가락 제비 조개 종이 주사위 주전자 지갑 지구 지우개 지팡이 진주 집게 짬뽕 조각 조약돌 지하철 지렁이
+차표 참새 창문 책상 천둥 철봉 첼로 청소기 체육관 초콜릿 촛불 추석 축구 치마 치약 칠판 침대 초승달 치타 치즈
+카메라 카레 캥거루 커피 컴퓨터 케이크 코끼리 쿠키 크레파스 키위
+타조 태양 택시 토끼 토마토 통나무 튤립 트럭 티셔츠
+파도 파리 파일 팝콘 편지 포도 폭포 표범 풍선 프라이팬 피아노 피자 필통 피리 피부
+하늘 하마 학교 한복 할머니 햇살 해바라기 호랑이 호수 호박 화분 확성기 황소 효자 후추 하프 해파리 해적 해변 호떡
+고양이 고래 고구마 고추 고무줄 고슴도치 공원 공책 과일 과자 관람차 광장 구름 구두 구슬 구급차 국수 군밤 굴뚝 귀걸이 규칙 그림 그네 금붕어
+기차 기린 기억 기타 기름 기둥 기와 기러기 기계 기후
+가정 가발 가사 가스 가운 가죽 가축 가치 각도 간식 간장 간판 감기 감자 감옥 강아지 강물 강당 개구리 개미 개나리 거미 거북이 거울 건물 건전지 검정 겨울 결혼 경찰 계단 계란 계절
+고기 고리 고향 고민 고속도로 고장 곤충 골목 골프 공기 공룡 공부 공항 곱창 과학 광고 교실 교통 교회 구멍 구청 구멍가게 국가 국물 군인 권투 그림자 그릇 극장 근육 글씨 금요일 급식 기쁨 기도 기분 기상 기록 기술 기사 기념일 기숙사
+나이테 나들이 나룻배 낙서 날씨 남극 남쪽 낮잠 내용 내복 냄새 노인 노동 녹차 논밭 놀람 농부 농장 높이 눈물 뉴스 능금
+다이아몬드 다락방 다섯 단어 단풍 달리기 닭장 당근 대결 대통령 대화 댄스 더위 덤불 도로 도움 도자기 독서 돌다리 동네 동생 동화책 돼지 된장 두꺼비 두통 둘레 뒤뜰 드라마 들판 등대 등산 디저트 땀방울 떡국
+라이터 라켓 라인 램프 랜턴 레일 레코드 레이더 로션 로비 롤러스케이트 루비 리더
+마라톤 마법 마스크 마이크 마음 마지막 마켓 마트 막걸리 만남 만세 말투 망아지 매미 매듭 매력 맥박 맨발 머리핀 머플러 먼지 메달 메뚜기 메아리 메모 메주 멸치 명절 모델 모두 모란 모서리 모양 모임 목마 목소리 목욕탕 목요일 몽둥이 무게 무대 무늬 무료 무역 무전기 문구점 문제 문패 물감 물결 물방울 물병 뮤지컬 미국 미래 미술관 미용실 민속촌 믿음 밀가루 밀림
+바구니 바늘 바닥 바둑 바퀴 바이올린 박물관 박수 반달 반찬 발가락 발표 방귀 방학 방패 배구 배달 백과사전 백화점 버터 번호 벌레 벌판 범인 벚꽃 베개 변신 병원 보물 보약 보트 복도 본문 부모 부자 부적 북극 분필 불고기 붕대 브로콜리 블록 비명 빈칸 빙수 빨래
+사거리 사고 사냥 사다리 사랑 사막 사슬 사실 사업 사용 사위 사전 사진 사촌 산타 살구 삼각형 삼촌 상어 상점 새벽 색연필 샘물 생각 생일 샴푸 서랍 서리 서울 석류 석탄 선생님 설날 설탕 세계 세금 세수 소리 소망 소문 소방서 소식 소원 소주 소화기 속옷 손가락 손톱 송아지 쇼핑 수업 수영 수저 수학 수염 숙제 순간 스카프 스키 스마트폰 스승 슬리퍼 승리 시간 시골 시내 시력 시청 식당 식물 식사 신문 신호등 심장 십자가 싸움 쌍둥이 썰매 씨앗
+아파트 아빠 아주머니 아카시아 아프리카 악기 악수 안개 안내 앞치마 애벌레 야구 야채 약국 약속 양말 양초 어른 어린이 어머니 어부 어제 얼굴 엄마 엉덩이 에어컨 여름 여행 역사 연극 연기 연습 연탄 열매 염소 영수증 영양 예술 옛날 오늘 오전 오후 온도 온천 올림픽 옷장 와이퍼 완두콩 외국 요리 요일 욕조 우정 운동 운전 울타리 웃음 원피스 월요일 위로 유치원 육지 윷놀이 음식 음악 응원 의사 이웃 이름 이메일 이사 이삿짐 이유 인기 인사 일요일 일출 임금 입구 입학
+자랑 자리 자석 자판기 작가 작품 잔디 장난감 장독 장마 장소 재료 재주 저녁 전기 전쟁 전철 점심 정거장 제목 제주도 조각달 조상 조선 졸업 좌석 주먹 주머니 주방 주소 주스 준비 중국 지도 지붕 지진 직업 진실 질문 짝꿍 쪽지 찌개
+차례 차이 착각 찬장 참기름 창고 채소 처음 천사 청바지 청포도 체온 체조 초대 초밥 최고 추위 추억 축제 출구 충전기 취미 치과 치킨 친구 칭찬
+카드 카페 카펫 칼국수 캠핑 커튼 케첩 코트 콜라 콧물 크리스마스 클립
+타악기 탁구 탈춤 탐험 태극기 태풍 터널 텔레비전 토요일 통조림 통화 퇴근 투표 튀김
+파란색 파랑새 파스타 파인애플 파티 판사 팔찌 패션 팽이 퍼즐 페이지 편의점 평화 포스터 포크 포장 표정 푸딩 풍경 프로그램 플라스틱 피곤 필름
+하루 하숙 학생 한글 한옥 할아버지 함박눈 항구 해결 해녀 해물 해산물 햄버거 행복 향기 허리 헬리콥터 현관 협동 혜성 호기심 호텔 혼자 홍수 화장실 화가 화요일 환자 황금 회사 회의 횡단보도 후식 훈련 휴지 흑백 희망
+`;
+
+const HANGUL = /^[가-힣]+$/;
+const YI = [2, 3, 6, 7, 12, 17, 20]; // ㅑ ㅒ ㅕ ㅖ ㅛ ㅠ ㅣ
+function parts(ch) { const c = ch.charCodeAt(0) - 0xAC00; return { cho: Math.floor(c / 588), jung: Math.floor((c % 588) / 28), jong: c % 28 }; }
+function make(cho, jung, jong) { return String.fromCharCode(0xAC00 + (cho * 21 + jung) * 28 + jong); }
+/* 두음 법칙: 리→이, 라→나, 녀→여 ... */
+function dueum(ch) {
+  if (!/[가-힣]/.test(ch)) return ch;
+  const p = parts(ch);
+  if (p.cho === 5) return make(YI.includes(p.jung) ? 11 : 2, p.jung, p.jong);
+  if (p.cho === 2 && YI.includes(p.jung)) return make(11, p.jung, p.jong);
+  return ch;
+}
+function starters(ch) { const d = dueum(ch); return d === ch ? [ch] : [ch, d]; }
+function lastChar(w) { return w[w.length - 1]; }
+
+const WORDS = Array.from(new Set(WORDS_RAW.split(/\s+/).filter(w => w.length >= 2 && HANGUL.test(w))));
+const BY_START = new Map();
+for (const w of WORDS) { const k = w[0]; if (!BY_START.has(k)) BY_START.set(k, []); BY_START.get(k).push(w); }
+
+function candidates(prevWord, used) {
+  const out = [];
+  for (const s of starters(lastChar(prevWord))) for (const w of (BY_START.get(s) || [])) if (!used.has(w)) out.push(w);
+  return out;
+}
+function continuations(word, used) {
+  const next = new Set(used); next.add(word);
+  return candidates(word, next).length;
+}
+function normalize(raw) { return String(raw || '').replace(/[\s.,!?'"“”‘’~·…]/g, ''); }
+/* returns {ok, word} or {ok:false, reason, msg} */
+function check(raw, prevWord, used) {
+  const w = normalize(raw);
+  if (!w) return { ok: false, reason: 'empty', msg: '단어를 입력해 주세요.' };
+  if (!HANGUL.test(w)) return { ok: false, reason: 'hangul', msg: '한글 단어만 입력할 수 있어요.' };
+  if (w.length < 2) return { ok: false, reason: 'short', msg: '두 글자 이상의 단어를 말해 주세요.' };
+  if (prevWord) {
+    const st = starters(lastChar(prevWord));
+    if (!st.includes(w[0])) return { ok: false, reason: 'chain', msg: `'${st.join("' 또는 '")}'(으)로 시작하는 단어여야 해요.` };
+  }
+  if (used.has(w)) return { ok: false, reason: 'used', msg: '이미 나온 단어예요.' };
+  return { ok: true, word: w };
+}
+/* level: easy | normal | hard */
+function pick(prevWord, used, level) {
+  const pool = prevWord ? candidates(prevWord, used) : WORDS.filter(w => !used.has(w));
+  if (!pool.length) return null;
+  const scored = pool.map(w => ({ w, n: continuations(w, used) }));
+  let sel = scored;
+  if (level === 'easy') { const good = scored.filter(s => s.n >= 3); if (good.length) sel = good; }
+  if (level === 'hard') { const m = Math.min(...scored.map(s => s.n)); sel = scored.filter(s => s.n === m); }
+  if (!prevWord) { const good = scored.filter(s => s.n >= 3); if (good.length) sel = good; }
+  return sel[Math.floor(Math.random() * sel.length)].w;
+}
+</script>
