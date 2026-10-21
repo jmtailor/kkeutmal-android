@@ -27,6 +27,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          FIX=$(grep -o 'id="ver">FIX-[0-9]*' www/index.html | grep -o 'FIX-[0-9]*' | head -1)
+          FIX=${FIX:-FIX-0}
+          cp android/app/build/outputs/apk/debug/app-debug.apk "kkeutmal-${FIX}.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk kkeutmal-debug.apk
           gh release delete latest-apk --yes --cleanup-tag || true
-          gh release create latest-apk kkeutmal-debug.apk --title "끝말잇기 debug APK" --notes "자동 빌드된 디버그 APK" --target "$GITHUB_SHA"
+          gh release create latest-apk "kkeutmal-${FIX}.apk" kkeutmal-debug.apk --title "끝말잇기 ${FIX} debug APK" --notes "자동 빌드된 디버그 APK (${FIX}). kkeutmal-debug.apk는 같은 파일의 고정 주소용 사본입니다." --target "$GITHUB_SHA"

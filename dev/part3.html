@@ -2,7 +2,7 @@
 <div class="shell">
   <header class="top">
     <div>
-      <h1>끝말잇기 <span class="ver" id="ver">FIX-11</span></h1>
+      <h1>끝말잇기 <span class="ver" id="ver">FIX-13</span></h1>
       <p class="score" id="score">이어간 단어 0 · 내 단어 0</p>
     </div>
     <div class="top-actions">
@@ -53,7 +53,11 @@
       <span class="track" aria-hidden="true"><span class="knob"></span></span>
       <span class="sw-text">다른 앱 소리 멈추기</span>
     </label>
-    <span class="timer-hint" id="mediaHint">음악·영상을 멈춰요</span>
+    <label class="sw">
+      <input type="checkbox" role="switch" id="sfxSw" checked>
+      <span class="track" aria-hidden="true"><span class="knob"></span></span>
+      <span class="sw-text">효과음</span>
+    </label>
   </div>
 
   <main class="play">
@@ -83,7 +87,7 @@
 <script id="ui">
 (function () {
   const $ = id => document.getElementById(id);
-  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), infoBtn: $('infoBtn'), send: $('send'), hideSw: $('hideSw'), hideRow: $('hideRow'), mediaSw: $('mediaSw'), mediaHint: $('mediaHint'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
+  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), infoBtn: $('infoBtn'), send: $('send'), hideSw: $('hideSw'), sfxSw: $('sfxSw'), hideRow: $('hideRow'), mediaSw: $('mediaSw'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
   const SHOW = 4; // words kept on screen
   const TIME_LIMIT_MS = 20000; // FIX-01: 시간제한 20초 (사용자 결정)
 
@@ -202,7 +206,9 @@
     els.word.value = '';
     render();
     startTimer();
-    if (speakFirst && mode() !== 'text') speak(first).then(() => autoMic(state.gen));
+    const g0 = state.gen;
+    const wait = speakFirst ? sfx('start') : 0;
+    if (speakFirst && mode() !== 'text') sleep(wait).then(() => (state && state.gen === g0 ? speak(first).then(() => autoMic(g0)) : null));
   }
   function lastWord() {
     if (!state.history.length) return ''; return state.history[state.history.length - 1].word; }
@@ -246,6 +252,35 @@
     startTimer();
     if (mode() !== 'text') speak(w).then(() => autoMic(state.gen));
     if (!matchMedia('(pointer: coarse)').matches) els.word.focus();
+  }
+
+  /* ---------- sound effects (FIX-13): WebAudio로 직접 만든 짧은 효과음 ---------- */
+  let actx = null, sfxOn = true;
+  function ensureCtx() {
+    try {
+      if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+      if (actx && actx.state === 'suspended') actx.resume();
+    } catch (e) { actx = null; }
+    return actx;
+  }
+  function tone(t0, freq, dur, type, vol) {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.18, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  // 반환값: 효과음이 끝나기까지 걸리는 시간(ms). 꺼져 있으면 0.
+  function sfx(kind) {
+    if (!sfxOn || !ensureCtx()) return 0;
+    try {
+      const t = actx.currentTime + 0.03;
+      if (kind === 'start') { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(t + i * 0.1, f, 0.22, 'triangle', 0.2)); return 520; }
+      if (kind === 'win') { [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((f, i) => tone(t + i * 0.12, f, 0.3, 'triangle', 0.22)); return 900; }
+      if (kind === 'lose') { [392, 349.23, 311.13, 261.63].forEach((f, i) => tone(t + i * 0.22, f, 0.42, 'sawtooth', 0.12)); return 1100; }
+    } catch (e) {}
+    return 0;
   }
 
   /* ---------- end-of-game animation (FIX-08) ---------- */
@@ -329,7 +364,7 @@
       if (mode() !== 'text') speak(h.word);
       if (mode() === 'voice') { h.shown = true; if (+b.dataset.i === state.history.length - 1) state.reveal = true; render(); }
     }));
-    if (state.over && !state.fx) { state.fx = true; endFx(state.lose === 'time' ? 'lose' : 'win'); }
+    if (state.over && !state.fx) { state.fx = true; endFx(state.lose === 'time' ? 'lose' : 'win'); sfx(state.lose === 'time' ? 'lose' : 'win'); }
     els.word.disabled = state.over;
     els.word.placeholder = state.over ? '새 게임을 시작해 주세요' : (st[1] ? "‘" + st[0] + "’ 또는 ‘" + st[1] + "’(으)로 시작" : "‘" + st[0] + "’(으)로 시작");
   }
@@ -359,13 +394,18 @@
     if (/not available|unavailable/i.test(m)) return '이 기기에는 음성 인식 서비스가 없어요. Google 앱을 설치하거나 업데이트해 주세요.';
     return '음성 인식에 문제가 생겼어요. 키보드로 입력해 주세요. (' + m.slice(0, 40) + ')';
   }
+  // FIX-12: 플러그인 호출이 응답 없이 멈춰도 화면이 '준비 중'에 갇히지 않도록 시간 제한을 둔다.
+  const withTimeout = (p, ms, tag) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(tag + ' timeout')), ms))]);
+  let micTok = 0, micPreparing = false;
+  function micUiOff() { listening = false; micPreparing = false; els.mic.classList.remove('on'); els.mic.setAttribute('aria-label', '음성으로 입력'); }
   async function micReady(RN) {
-    let perm = await RN.checkPermissions();
-    if (perm.speechRecognition !== 'granted') perm = await RN.requestPermissions();
+    let perm = await withTimeout(RN.checkPermissions(), 4000, 'permission check');
+    if (perm.speechRecognition !== 'granted') perm = await withTimeout(RN.requestPermissions(), 60000, 'permission');
     if (perm.speechRecognition !== 'granted') return 'permission';
     // 권한 창 직후 또는 첫 호출에서는 인식기가 아직 준비되지 않을 수 있어 몇 번 더 확인한다.
     for (let i = 0; i < 4; i++) {
-      const av = await RN.available();
+      let av = null;
+      try { av = await withTimeout(RN.available(), 3000, 'available'); } catch (e) { av = null; }
       if (av && av.available) return 'ok';
       await sleep(400);
     }
@@ -373,34 +413,42 @@
   }
   async function startMicNative() {
     const RN = NATIVE.SpeechRecognition;
-    if (listening) { try { RN.stop(); } catch (e) {} return; } // stop() answers via the pending start()
+    if (listening) { // 준비 중이면 취소, 듣는 중이면 멈춤. (stop()은 기다리지 않는다: 듣는 중이 아니면 응답이 없을 수 있다)
+      micTok++; const wasPreparing = micPreparing; micUiOff();
+      try { RN.stop().catch(() => {}); } catch (e) {}
+      if (wasPreparing) setStatus('');
+      return;
+    }
     if (state.over || state.ready || busy) return;
     stopSpeech();
     focusOn();
-    listening = true; // 준비 중에 중복 눌림 방지
+    const tok = ++micTok;
+    listening = true; micPreparing = true;
     els.mic.classList.add('on'); els.mic.setAttribute('aria-label', '음성 입력 멈추기');
     setStatus('마이크 준비 중…');
-    const micOff = () => { listening = false; els.mic.classList.remove('on'); els.mic.setAttribute('aria-label', '음성으로 입력'); };
+    const stale = () => tok !== micTok;
     try {
       const rd = await micReady(RN);
-      if (rd !== 'ok') { micOff(); setStatus(nativeMicMsg(rd), true); return; }
-    } catch (e) { micOff(); setStatus(nativeMicMsg(e), true); return; }
+      if (stale()) return;
+      if (rd !== 'ok') { micUiOff(); setStatus(nativeMicMsg(rd), true); return; }
+    } catch (e) { if (!stale()) { micUiOff(); setStatus(nativeMicMsg(e), true); } return; }
+    micPreparing = false;
     try {
       let r = null;
-      try { await RN.stop(); } catch (e) {} // 이전 세션 찌꺼기 정리(FIX-11)
-      await sleep(250);
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           setStatus('듣고 있어요. 단어를 말해 주세요.');
-          r = await RN.start({ language: 'ko-KR', maxResults: 3, partialResults: false, popup: false });
+          r = await withTimeout(RN.start({ language: 'ko-KR', maxResults: 3, partialResults: false, popup: false }), 25000, 'listen');
           break;
         } catch (e) {
           const m = String((e && (e.message || e)) || '');
-          if (/No speech|No match|permission/i.test(m) || attempt === 3 || state.over || !listening) throw e;
-          try { await RN.stop(); } catch (e2) {}
-          await sleep(500 + attempt * 400);
+          if (stale() || /No speech|No match|permission|timeout/i.test(m) || attempt === 3 || state.over) throw e;
+          try { RN.stop().catch(() => {}); } catch (e2) {} // 기다리지 않음
+          await sleep(600 + attempt * 400);
+          if (stale()) return;
         }
       }
+      if (stale()) return;
       const list = ((r && r.matches) || []).map(m => String(m).replace(/\s+/g, ''));
       if (!list.length) { setStatus(nativeMicMsg('No speech'), true); }
       else {
@@ -409,8 +457,13 @@
         els.word.value = best; setStatus('');
         submit(best);
       }
-    } catch (e) { setStatus(nativeMicMsg(e), true); }
-    finally { listening = false; els.mic.classList.remove('on'); els.mic.setAttribute('aria-label', '음성으로 입력'); }
+    } catch (e) {
+      if (!stale()) {
+        if (/timeout/i.test(String(e && e.message))) { try { RN.stop().catch(() => {}); } catch (e2) {} setStatus('말소리가 들리지 않았어요. 마이크 버튼을 다시 눌러 말해 주세요.', true); }
+        else setStatus(nativeMicMsg(e), true);
+      }
+    }
+    finally { if (!stale()) micUiOff(); }
   }
   function startMic() {
     if (NATIVE) { startMicNative(); return; }
@@ -468,7 +521,10 @@
   paintHideRow();
   focusPref = loadFocusPref();
   els.mediaSw.checked = focusPref;
-  if (!FOCUS) { els.mediaSw.disabled = true; els.mediaHint.textContent = '설치한 앱에서만 쓸 수 있어요'; }
+  if (!FOCUS) { els.mediaSw.disabled = true; }
+  try { sfxOn = localStorage.getItem('kk-sfx') !== '0'; } catch (e) { sfxOn = true; }
+  els.sfxSw.checked = sfxOn;
+  els.sfxSw.addEventListener('change', () => { sfxOn = els.sfxSw.checked; try { localStorage.setItem('kk-sfx', sfxOn ? '1' : '0'); } catch (e) {} if (sfxOn) sfx('start'); });
   els.mediaSw.addEventListener('change', () => {
     focusPref = els.mediaSw.checked;
     try { localStorage.setItem('kk-media', focusPref ? '1' : '0'); } catch (e) {}
