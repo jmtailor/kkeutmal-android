@@ -27,7 +27,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          FIX=$(grep -o 'FIX-[0-9]*' www/index.html | head -1)
+          FIX=$(grep -o 'id="ver">FIX-[0-9]*' www/index.html | grep -o 'FIX-[0-9]*' | head -1)
           FIX=${FIX:-FIX-0}
           cp android/app/build/outputs/apk/debug/app-debug.apk "kkeutmal-${FIX}.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk kkeutmal-debug.apk
