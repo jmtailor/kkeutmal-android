@@ -168,6 +168,7 @@ svg { display: block; }
 .stage.shake { animation: fxshake .6s ease-in-out; }
 @keyframes fxpop { 0% { transform: scale(.9); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
 @keyframes fxshake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(5px); } }
+.timer-row[hidden] { display: none; }
 </style>
 
 <script id="dict">
@@ -212922,7 +212923,7 @@ function pick(prevWord, used, level) {
 <div class="shell">
   <header class="top">
     <div>
-      <h1>끝말잇기 <span class="ver" id="ver">FIX-08</span></h1>
+      <h1>끝말잇기 <span class="ver" id="ver">FIX-11</span></h1>
       <p class="score" id="score">이어간 단어 0 · 내 단어 0</p>
     </div>
     <div class="top-actions">
@@ -212956,6 +212957,15 @@ function pick(prevWord, used, level) {
     </label>
     <div class="timebar" id="timebar" role="progressbar" aria-label="남은 시간" aria-valuemin="0" aria-valuemax="20" aria-valuenow="20" hidden><div class="fill" id="timefill"></div></div>
     <span class="timer-hint" id="timerHint">내 차례에만 적용돼요</span>
+  </div>
+
+  <div class="timer-row" id="hideRow" hidden>
+    <label class="sw">
+      <input type="checkbox" role="switch" id="hideSw">
+      <span class="track" aria-hidden="true"><span class="knob"></span></span>
+      <span class="sw-text">글자 가리기</span>
+    </label>
+    <span class="timer-hint">음성 모드에서 앱 단어를 숨겨요</span>
   </div>
 
   <div class="timer-row" id="mediaRow">
@@ -212994,7 +213004,7 @@ function pick(prevWord, used, level) {
 <script id="ui">
 (function () {
   const $ = id => document.getElementById(id);
-  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), infoBtn: $('infoBtn'), mediaSw: $('mediaSw'), mediaHint: $('mediaHint'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
+  const els = { score: $('score'), stage: $('stage'), chain: $('chain'), status: $('status'), form: $('form'), word: $('word'), mic: $('mic'), level: $('level'), newGame: $('newGame'), infoBtn: $('infoBtn'), send: $('send'), hideSw: $('hideSw'), hideRow: $('hideRow'), mediaSw: $('mediaSw'), mediaHint: $('mediaHint'), timeSw: $('timeSw'), timebar: $('timebar'), timefill: $('timefill'), timerHint: $('timerHint') };
   const SHOW = 4; // words kept on screen
   const TIME_LIMIT_MS = 20000; // FIX-01: 시간제한 20초 (사용자 결정)
 
@@ -213004,6 +213014,7 @@ function pick(prevWord, used, level) {
   let state;
   let busy = false;
   let listening = false;
+  let hidePref = false; // FIX-10: 음성 모드에서 글자 가리기(기본: 표시)
   let rec = null;
 
   const NATIVE = window.KK_NATIVE || null; // set by native.js inside the Android app
@@ -213065,7 +213076,7 @@ function pick(prevWord, used, level) {
   function saveTimePref(v) { try { localStorage.setItem('kk-timer', v ? '1' : '0'); } catch (e) {} }
   function paintTimer() {
     els.timeSw.checked = timeOn;
-    els.timebar.hidden = !(timeOn && state && !state.over);
+    els.timebar.hidden = !(timeOn && state && !state.over && !state.ready);
     els.timerHint.hidden = timeOn;
   }
   function paintBar(left) {
@@ -213081,7 +213092,7 @@ function pick(prevWord, used, level) {
   }
   function startTimer(ms) {
     clearTimer();
-    if (!timeOn || !state || state.over) { paintTimer(); return; }
+    if (!timeOn || !state || state.over || state.ready) { paintTimer(); return; }
     remain = ms == null ? TIME_LIMIT_MS : ms;
     deadline = Date.now() + remain;
     paintTimer(); paintBar(remain);
@@ -213101,7 +213112,8 @@ function pick(prevWord, used, level) {
   }
 
   /* ---------- game ---------- */
-  function newGame(speakFirst) {
+  function newGame(speakFirst, ready) {
+    if (ready) { state = { ready: true, history: [], used: new Set(), over: false, reveal: false, mine: 0, gen: (state ? state.gen : 0) + 1 }; busy = false; clearTimer(); setStatus(''); els.word.value = ''; render(); return; }
     const used = new Set();
     const first = pick(null, used, els.level.value);
     used.add(first);
@@ -213113,10 +213125,11 @@ function pick(prevWord, used, level) {
     startTimer();
     if (speakFirst && mode() !== 'text') speak(first).then(() => autoMic(state.gen));
   }
-  function lastWord() { return state.history[state.history.length - 1].word; }
+  function lastWord() {
+    if (!state.history.length) return ''; return state.history[state.history.length - 1].word; }
 
   async function submit(raw) {
-    if (busy || state.over) return;
+    if (busy || state.over || state.ready) return;
     const res = check(raw, lastWord(), state.used);
     if (!res.ok) { setStatus(res.msg, true); return; }
     busy = true;
@@ -213177,17 +213190,30 @@ function pick(prevWord, used, level) {
     els.stage.classList.add(kind === 'win' ? 'pop' : 'shake');
   }
 
+  /* ---------- ready screen (FIX-09) ---------- */
+  function renderReady() {
+    els.score.textContent = '설정을 고른 뒤 시작하세요';
+    els.stage.innerHTML = '<div class="stage-text"><p class="eyebrow">준비</p><p class="stage-title">설정을 고르고 시작을 눌러 주세요.</p><p class="stage-sub"><button type="button" class="send start" id="startBtn">게임 시작</button></p></div>';
+    $('startBtn').addEventListener('click', () => newGame(true));
+    els.chain.innerHTML = '';
+    els.word.disabled = true; els.send.disabled = true; els.mic.disabled = true;
+    els.word.placeholder = '게임 시작을 눌러 주세요';
+    paintTimer();
+  }
+
   /* ---------- render ---------- */
   function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   function wordHTML(w) { return esc(w.slice(0, -1)) + '<span class="last">' + esc(lastChar(w)) + '</span>'; }
 
   function render(thinking) {
+    if (state.ready) { renderReady(); return; }
+    els.send.disabled = false; els.mic.disabled = false;
     const n = state.history.length;
     els.score.textContent = '이어간 단어 ' + n + ' · 내 단어 ' + state.mine;
 
     const prev = lastWord();
     const st = starters(lastChar(prev));
-    const textMode = mode() !== 'voice';
+    const textMode = mode() !== 'voice' || !hidePref;
     if (state.over) {
       els.stage.innerHTML = '<div class="glyphs"><div class="glyph big">' + (state.lose === 'time' ? '패' : '승') + '</div></div><div class="stage-text"><p class="eyebrow">게임 끝</p><p class="stage-title">' + (state.lose === 'time' ? '시간 초과! 20초 안에 잇지 못했어요.' : '이을 단어가 없어요. 내가 이겼어요!') + '</p><p class="stage-sub">‘새 게임’으로 다시 시작해 보세요.</p></div>';
     } else if (textMode || state.reveal) {
@@ -213232,8 +213258,8 @@ function pick(prevWord, used, level) {
   /* ---------- speech in ---------- */
   // FIX-07: '음성'만 선택했을 때, 앱이 말을 마치면 마이크를 자동으로 켠다. '둘 다'는 기존처럼 버튼을 눌러야 한다.
   function autoMic(gen) {
-    if (mode() !== 'voice' || !state || state.gen !== gen || state.over || busy || listening) return;
-    startMic();
+    if (mode() !== 'voice' || !state || state.gen !== gen || state.over || state.ready || busy || listening) return;
+    setTimeout(() => { if (state && state.gen === gen && !state.over && !busy && !listening && mode() === 'voice') startMic(); }, 450);
   }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   function micMsg(code) {
@@ -213252,7 +213278,7 @@ function pick(prevWord, used, level) {
     if (/busy/i.test(m)) return '음성 인식이 아직 이전 요청을 처리하는 중이에요. 잠시 뒤에 다시 눌러 주세요.';
     if (/Audio/i.test(m)) return '마이크를 사용할 수 없어요. 다른 앱이 마이크를 쓰고 있는지 확인해 주세요.';
     if (/not available|unavailable/i.test(m)) return '이 기기에는 음성 인식 서비스가 없어요. Google 앱을 설치하거나 업데이트해 주세요.';
-    return '음성 인식에 문제가 생겼어요. 키보드로 입력해 주세요.';
+    return '음성 인식에 문제가 생겼어요. 키보드로 입력해 주세요. (' + m.slice(0, 40) + ')';
   }
   async function micReady(RN) {
     let perm = await RN.checkPermissions();
@@ -213269,7 +213295,7 @@ function pick(prevWord, used, level) {
   async function startMicNative() {
     const RN = NATIVE.SpeechRecognition;
     if (listening) { try { RN.stop(); } catch (e) {} return; } // stop() answers via the pending start()
-    if (state.over || busy) return;
+    if (state.over || state.ready || busy) return;
     stopSpeech();
     focusOn();
     listening = true; // 준비 중에 중복 눌림 방지
@@ -213282,16 +213308,18 @@ function pick(prevWord, used, level) {
     } catch (e) { micOff(); setStatus(nativeMicMsg(e), true); return; }
     try {
       let r = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
+      try { await RN.stop(); } catch (e) {} // 이전 세션 찌꺼기 정리(FIX-11)
+      await sleep(250);
+      for (let attempt = 0; attempt < 4; attempt++) {
         try {
           setStatus('듣고 있어요. 단어를 말해 주세요.');
           r = await RN.start({ language: 'ko-KR', maxResults: 3, partialResults: false, popup: false });
           break;
         } catch (e) {
           const m = String((e && (e.message || e)) || '');
-          // 첫 시도에서만 나는 일시적 오류는 한 번 더 시도한다.
-          if (attempt === 0 && /Audio|busy|not available|unavailable|error/i.test(m) && !/No speech|No match/i.test(m)) { await sleep(500); continue; }
-          throw e;
+          if (/No speech|No match|permission/i.test(m) || attempt === 3 || state.over || !listening) throw e;
+          try { await RN.stop(); } catch (e2) {}
+          await sleep(500 + attempt * 400);
         }
       }
       const list = ((r && r.matches) || []).map(m => String(m).replace(/\s+/g, ''));
@@ -213307,6 +213335,7 @@ function pick(prevWord, used, level) {
   }
   function startMic() {
     if (NATIVE) { startMicNative(); return; }
+    if (state.ready) return;
     if (!SR) { setStatus('이 화면에서는 음성 인식을 쓸 수 없어요. 폰 키보드의 마이크 버튼을 쓰거나, APK 앱으로 만들어 쓰면 해결돼요.', true); return; }
     if (state.over || busy) return;
     stopSpeech();
@@ -213348,11 +213377,16 @@ function pick(prevWord, used, level) {
   els.newGame.addEventListener('click', () => { newGame(true); });
   document.querySelectorAll('input[name="out"]').forEach(r => r.addEventListener('change', () => {
     if (!hasTTS && mode() !== 'text') { $('out-text').checked = true; setStatus('이 기기는 음성 출력을 지원하지 않아요.', true); }
-    state.reveal = false; render();
+    state.reveal = false; paintHideRow(); render();
   }));
   if (!hasTTS) { $('out-voice').disabled = true; $('out-both').disabled = true; $('out-text').checked = true; }
 
   els.infoBtn.addEventListener('click', () => { const d = $('infoDlg'); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); });
+  try { hidePref = localStorage.getItem('kk-hide') === '1'; } catch (e) { hidePref = false; }
+  els.hideSw.checked = hidePref;
+  function paintHideRow() { els.hideRow.hidden = mode() !== 'voice'; }
+  els.hideSw.addEventListener('change', () => { hidePref = els.hideSw.checked; try { localStorage.setItem('kk-hide', hidePref ? '1' : '0'); } catch (e) {} state.reveal = false; render(); });
+  paintHideRow();
   focusPref = loadFocusPref();
   els.mediaSw.checked = focusPref;
   if (!FOCUS) { els.mediaSw.disabled = true; els.mediaHint.textContent = '설치한 앱에서만 쓸 수 있어요'; }
@@ -213370,7 +213404,7 @@ function pick(prevWord, used, level) {
     if (timeOn && state && !state.over && !busy) startTimer(); else stopTimer();
   });
 
-  newGame(false);
+  newGame(false, true);
 })();
 </script>
 </body></html>

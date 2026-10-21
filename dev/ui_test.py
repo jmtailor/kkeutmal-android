@@ -13,6 +13,9 @@ with sync_playwright() as p:
         pg.route('**/*', lambda r: r.abort() if 'fonts.g' in r.request.url else r.continue_())
         pg.clock.install()
         pg.goto('file://' + html); pg.clock.run_for(300)
+        res.append(ok(pg.is_visible('#startBtn') and pg.is_disabled('#word'), f'{name}: 시작 전 준비 화면'))
+        res.append(ok(pg.is_hidden('#hideRow'), f'{name}: 글자 가리기는 음성 모드에서만'))
+        pg.click('#startBtn'); pg.clock.run_for(300)
         res.append(ok(not pg.is_checked('#timeSw'), f'{name}: 시간제한 기본 꺼짐'))
         res.append(ok(pg.is_hidden('#timebar'), f'{name}: 꺼짐일 때 막대 숨김'))
         pg.click('label.sw:has(#timeSw)'); pg.clock.run_for(200)
@@ -32,7 +35,7 @@ with sync_playwright() as p:
         res.append(ok(pg.is_hidden('#timebar'), f'{name}: 종료 후 막대 숨김'))
         pg.screenshot(path=f'{out}/{name}_timeup.png')
         # persistence
-        pg.reload(); pg.clock.run_for(300)
+        pg.reload(); pg.clock.run_for(300); pg.click('#startBtn'); pg.clock.run_for(300)
         res.append(ok(pg.is_checked('#timeSw'), f'{name}: 새로고침 후 설정 유지'))
         # new game restarts, correct answer stops bar
         sc = pg.evaluate("({sh:document.documentElement.scrollHeight, ch:document.documentElement.clientHeight})")
