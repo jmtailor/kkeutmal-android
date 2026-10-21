@@ -146,4 +146,13 @@ svg { display: block; }
 .stage-title { word-break: keep-all; }
 .timer-hint { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-2); }
 @media (max-height: 500px) { .timer-row { min-height: 22px; } }
+
+/* C: dictionary attribution */
+.top-actions { display: flex; gap: 8px; align-items: center; }
+.btn-icon { padding: 8px 10px; font-size: 13px; color: var(--ink-2); }
+.info { max-width: min(92vw, 440px); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 18px; }
+.info::backdrop { background: rgba(0, 0, 0, 0.45); }
+.info h2 { font-family: var(--font-display); font-weight: 400; font-size: 20px; margin: 0 0 8px; }
+.info p { margin: 0 0 10px; line-height: 1.5; font-size: 14px; }
+.info .info-meta { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
 </style>

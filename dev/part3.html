@@ -5,7 +5,10 @@
       <h1>끝말잇기</h1>
       <p class="score" id="score">이어간 단어 0 · 내 단어 0</p>
     </div>
-    <button type="button" class="btn" id="newGame">새 게임</button>
+    <div class="top-actions">
+      <button type="button" class="btn btn-icon" id="infoBtn" aria-label="사전 출처 보기" title="사전 출처">출처</button>
+      <button type="button" class="btn" id="newGame">새 게임</button>
+    </div>
   </header>
 
   <div class="claude-row" id="claudeRow">
@@ -55,6 +58,14 @@
     <button type="submit" class="send" id="send">보내기</button>
   </form>
 </div>
+
+<dialog class="info" id="infoDlg" aria-labelledby="infoTitle">
+  <h2 id="infoTitle">단어 사전 출처</h2>
+  <p>단어가 맞는지 확인할 때 국립국어원 「표준국어대사전」의 데이터를 사용합니다. 일반어 명사 중 2~8글자 한글 단어만 추려 썼습니다(변경됨).</p>
+  <p class="info-meta">출처: 국립국어원 표준국어대사전 (stdict.korean.go.kr)<br>2026-07-01 기준 데이터, spellcheck-ko/korean-dict-nikl 저장소 사본<br>라이선스: 크리에이티브 커먼즈 저작자표시-동일조건변경허락 2.0 대한민국 (CC BY-SA 2.0 KR)<br>creativecommons.org/licenses/by-sa/2.0/kr/</p>
+  <p class="info-meta">이 앱은 국립국어원과 관련이 없고, 사전에 없는 신조어·외래어는 인정되지 않을 수 있습니다.</p>
+  <form method="dialog"><button class="btn" id="infoClose">닫기</button></form>
+</dialog>
 
 <script id="ui">
 (function () {
@@ -426,6 +437,8 @@
   }));
   if (!hasTTS) { $('out-voice').disabled = true; $('out-both').disabled = true; $('out-text').checked = true; }
 
+  els.infoBtn = $('infoBtn');
+  els.infoBtn.addEventListener('click', () => { const d = $('infoDlg'); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); });
   timeOn = loadTimePref();
   els.timeSw.checked = timeOn;
   els.timeSw.addEventListener('change', () => {
